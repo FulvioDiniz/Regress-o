@@ -1,0 +1,74 @@
+import numpy as np
+import websocket
+import json
+import time
+import schedule
+from regressao import LinearRegression
+
+# Instanciar objeto de regressão linear
+regressor = LinearRegression()
+
+# Lista para armazenar valores de y
+y_vals = []
+
+# Contador de minutos
+contador = 0
+
+def adicionar_valor(y):
+    y_vals.append(y)
+
+    # Gerar novo valor de x a partir do comprimento da lista de valores de y
+    x = np.arange(1, len(y_vals) + 1, 5).reshape(-1, 1)
+
+    # Treinar modelo de regressão linear com os novos valores de x e y
+    regressor.fit(x, y_vals)
+
+    # Imprimir resultados
+    print(f"Coeficiente angular: {regressor.coef_}")
+    print(f"Coeficiente linear: {regressor.intercept_}")
+    x = (len(y_vals) + 10) // 5
+    print(f"Previsão para daqui a 10 minutos: {regressor.predict([[x * 5]])}")
+
+def atualizar_dados():
+    print("Atualizando dados...")
+    # aqui você adiciona a lógica para pegar os dados atualizados
+    price = 1.23 # exemplo
+
+    adicionar_valor(price)
+
+def on_message(ws, message):
+    data = json.loads(message)
+    price = data['tick']['quote']
+    adicionar_valor(price)
+
+def on_error(ws, error):
+    print(error)
+
+def on_close(ws):
+    print("Conexão fechada")
+
+def on_open(ws):
+    print("Conexão aberta")
+    subscribe_message = {
+        "ticks": "frxEURUSD",
+        "subscribe": 1
+    }
+    ws.send(json.dumps(subscribe_message))
+
+if __name__ == "__main__":
+    # Atualizar dados a cada 5 minutos
+    schedule.every(5).minutes.do(atualizar_dados)
+
+    # Aguardar 5 minutos antes de fazer a primeira previsão
+    time.sleep(300)
+
+    ws = websocket.WebSocketApp("wss://ws.binaryws.com/websockets/v3?app_id=1089", on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
+
+    while True:
+        contador += 1
+        schedule.run_pending()
+        ws.run_forever()
+        if contador >= 10:
+            x = (len(y_vals) + 10) // 5
+            print(f"Previsão para daqui a 10 minutos: {regressor.predict([[x * 5]])}")
+            contador = 0
